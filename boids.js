@@ -65,7 +65,11 @@ const boidMaterial = new THREE.MeshBasicMaterial({
 });
 
 window.initBoids = function() {
-    boidGroup.clear();
+    while(boidGroup.children.length > 0){ 
+        const child = boidGroup.children[0]; 
+        boidGroup.remove(child); 
+    }
+    
     boids = [];
 
     for (let i = 0; i < config.numBoids; i++) {
