@@ -1,7 +1,7 @@
-const config = {
-    numBoids: 200,
+window.boidsConfig = {
+    numBoids: 400,
     visualRange: 100,
-    speedLimit: 4,
+    speedLimit: 6,
     separationDist: 25,
     
     // Factors
@@ -14,61 +14,71 @@ const config = {
     boundaryTurnFactor: 0.5
 };
 
+const config = window.boidsConfig;
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x000000);
+scene.background = new THREE.Color(0x000000); 
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 3000);
-camera.position.set(0, 400, 600);
+camera.position.set(0, 400, 600); 
 camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
 
-// Controls
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true; // Smoother movement
+controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
-// Look
-const gridHelper = new THREE.GridHelper(config.boundarySize * 2, 20, 0x333333, 0x111111);
+let gridHelper = new THREE.GridHelper(config.boundarySize * 2, 20, 0x333333, 0x111111);
 scene.add(gridHelper);
 
-// Boundary 
-const geometryBox = new THREE.BoxGeometry(config.boundarySize * 2, config.boundarySize * 2, config.boundarySize * 2);
+const geometryBox = new THREE.BoxGeometry(1, 1, 1); 
 const materialBox = new THREE.LineBasicMaterial({ color: 0x333333 });
 const boundaryBox = new THREE.LineSegments(new THREE.EdgesGeometry(geometryBox), materialBox);
 scene.add(boundaryBox);
 
-let boids = [];
+// Helper to update the box size when config changes
+window.updateWorldBounds = function() {
+    const s = config.boundarySize * 2;
+    boundaryBox.scale.set(s, s, s);
+    
+    scene.remove(gridHelper);
+    gridHelper = new THREE.GridHelper(s, 20, 0x333333, 0x111111);
+    scene.add(gridHelper);
+}
 
-// Create the shape: A long, thin cone
+window.updateWorldBounds();
+
+
+const boidGroup = new THREE.Group();
+scene.add(boidGroup);
+
+let boids = [];
 const boidGeometry = new THREE.ConeGeometry(3, 12, 8); 
-// CRITICAL: Rotate the geometry so the cone's "tip" points along the Z-axis.
-// By default, Cone points up (Y-axis). 
-// Rotating X by PI/2 points it to Z-axis (Forward).
 boidGeometry.rotateX(Math.PI / 2); 
 
 const boidMaterial = new THREE.MeshBasicMaterial({ 
-    color: 0xffffff, // White
+    color: 0xffffff, 
     wireframe: true 
 });
 
-function initBoids() {
+window.initBoids = function() {
+    boidGroup.clear();
+    boids = [];
+
     for (let i = 0; i < config.numBoids; i++) {
         const x = (Math.random() * 2 - 1) * config.boundarySize;
         const y = (Math.random() * 2 - 1) * config.boundarySize;
         const z = (Math.random() * 2 - 1) * config.boundarySize;
 
         const mesh = new THREE.Mesh(boidGeometry, boidMaterial);
-        scene.add(mesh);
+        boidGroup.add(mesh);
 
         boids.push({
             mesh: mesh,
-            x: x,
-            y: y,
-            z: z,
+            x: x, y: y, z: z,
             dx: Math.random() * 4 - 2,
             dy: Math.random() * 4 - 2,
             dz: Math.random() * 4 - 2
@@ -76,7 +86,6 @@ function initBoids() {
     }
 }
 
-// Helpers 
 function distance(b1, b2) {
     return Math.sqrt(
         (b1.x - b2.x) ** 2 + 
@@ -85,27 +94,17 @@ function distance(b1, b2) {
     );
 }
 
-// -Rules 
-
 function rule1(boid) {
     let cx = 0, cy = 0, cz = 0;
     let count = 0;
-
     for (let other of boids) {
         if (other !== boid && distance(boid, other) < config.visualRange) {
-            cx += other.x;
-            cy += other.y;
-            cz += other.z;
+            cx += other.x; cy += other.y; cz += other.z;
             count++;
         }
     }
-
     if (count === 0) return { x: 0, y: 0, z: 0 };
-
-    cx /= count;
-    cy /= count;
-    cz /= count;
-
+    cx /= count; cy /= count; cz /= count;
     return {
         x: (cx - boid.x) * config.cohesionFactor,
         y: (cy - boid.y) * config.cohesionFactor,
@@ -115,7 +114,6 @@ function rule1(boid) {
 
 function rule2(boid) {
     let mx = 0, my = 0, mz = 0;
-
     for (let other of boids) {
         if (other !== boid) {
             let d = distance(boid, other);
@@ -126,7 +124,6 @@ function rule2(boid) {
             }
         }
     }
-    
     return { 
         x: mx * config.separationFactor, 
         y: my * config.separationFactor,
@@ -137,22 +134,14 @@ function rule2(boid) {
 function rule3(boid) {
     let ax = 0, ay = 0, az = 0;
     let count = 0;
-
     for (let other of boids) {
         if (other !== boid && distance(boid, other) < config.visualRange) {
-            ax += other.dx;
-            ay += other.dy;
-            az += other.dz;
+            ax += other.dx; ay += other.dy; az += other.dz;
             count++;
         }
     }
-
     if (count === 0) return { x: 0, y: 0, z: 0 };
-
-    ax /= count;
-    ay /= count;
-    az /= count;
-
+    ax /= count; ay /= count; az /= count;
     return {
         x: (ax - boid.dx) * config.alignmentFactor,
         y: (ay - boid.dy) * config.alignmentFactor,
@@ -172,7 +161,6 @@ function limitSpeed(boid) {
 function keepWithinBounds(boid) {
     const limit = config.boundarySize;
     const turn = config.boundaryTurnFactor;
-
     if (boid.x < -limit) boid.dx += turn;
     if (boid.x > limit) boid.dx -= turn;
     if (boid.y < -limit) boid.dy += turn;
@@ -180,8 +168,6 @@ function keepWithinBounds(boid) {
     if (boid.z < -limit) boid.dz += turn;
     if (boid.z > limit) boid.dz -= turn;
 }
-
-// Main Loop
 
 function animationLoop() {
     for (let boid of boids) {
@@ -201,12 +187,9 @@ function animationLoop() {
         boid.z += boid.dz;
 
         boid.mesh.position.set(boid.x, boid.y, boid.z);
-        
         boid.mesh.lookAt(boid.x + boid.dx, boid.y + boid.dy, boid.z + boid.dz);
     }
-
     controls.update();
-
     renderer.render(scene, camera);
     requestAnimationFrame(animationLoop);
 }
@@ -217,5 +200,6 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-initBoids();
+// Init on load
+window.initBoids();
 animationLoop();
